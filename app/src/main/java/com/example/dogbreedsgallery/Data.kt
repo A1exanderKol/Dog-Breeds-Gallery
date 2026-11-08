@@ -22,6 +22,8 @@ import retrofit2.http.GET
 import java.util.concurrent.TimeUnit
 import retrofit2.http.Query as HttpQuery
 
+// ======================= Room =======================
+
 @Entity(tableName = "breeds")
 data class BreedEntity(
     @PrimaryKey val id: Int,
@@ -65,6 +67,19 @@ abstract class BreedDao {
 @Database(entities = [BreedEntity::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun breedDao(): BreedDao
+}
+
+// ======================= Retrofit =======================
+
+interface DogApi {
+    @GET("breeds")
+    suspend fun getBreeds(): List<BreedDto>
+
+    @GET("images/search")
+    suspend fun getImages(
+        @HttpQuery("breed_ids") breedId: Int,
+        @HttpQuery("limit") limit: Int = 20
+    ): List<ImageDto>
 }
 
 data class ImageDto(val id: String?, val url: String?)
@@ -134,15 +149,37 @@ class BreedRepository(
     suspend fun setFavorite(id: Int, isFavorite: Boolean) = local.setFavorite(id, isFavorite)
 }
 
-// ======================= Retrofit =======================
 
-interface DogApi {
-    @GET("breeds")
-    suspend fun getBreeds(): List<BreedDto>
+object AppDependencies {
+    private const val API_KEY = ""
 
-    @GET("images/search")
-    suspend fun getImages(
-        @HttpQuery("breed_ids") breedId: Int,
-        @HttpQuery("limit") limit: Int = 20
-    ): List<ImageDto>
+    private lateinit var appContext: Context
+    fun init(context: Context) { appContext = context.applicationContext }
+
+    private val database by lazy {
+        Room.databaseBuilder(appContext, AppDatabase::class.java, "dog_breeds.db").build()
+    }
+
+    private val api by lazy {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().apply {
+                    if (API_KEY.isNotBlank()) header("x-api-key", API_KEY)
+                }.build())
+            }
+            .build()
+        val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+        Retrofit.Builder()
+            .baseUrl("https://api.thedogapi.com/v1/")
+            .client(client)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(DogApi::class.java)
+    }
+
+    val repository by lazy {
+        BreedRepository(LocalDataSource(database.breedDao()), RemoteDataSource(api))
+    }
 }
