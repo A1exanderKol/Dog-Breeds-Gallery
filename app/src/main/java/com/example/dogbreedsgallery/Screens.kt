@@ -300,3 +300,34 @@ private fun InfoRow(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
+
+// ======================= Избранное =======================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FavoritesScreen(viewModel: FavoritesViewModel, onBreedClick: (Int) -> Unit, onBack: () -> Unit) {
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Избранное") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        val list = favorites
+        when {
+            list == null -> MessageView(null, "Загрузка…", Modifier.padding(padding))
+            list.isEmpty() -> MessageView(
+                "💔", "Пока ничего нет",
+                Modifier.padding(padding), subtitle = "Добавляйте породы в избранное сердечком"
+            )
+            else -> BreedList(list, onBreedClick, viewModel::toggleFavorite, Modifier.padding(padding))
+        }
+    }
+}

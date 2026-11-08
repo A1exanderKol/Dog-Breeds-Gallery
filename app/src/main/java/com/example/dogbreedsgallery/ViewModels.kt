@@ -108,3 +108,19 @@ class DetailViewModel(
     }
 }
 
+// ======================= Избранное =======================
+
+class FavoritesViewModel(private val repository: BreedRepository) : ViewModel() {
+
+    /** null — ещё грузится из Room. */
+    val favorites: StateFlow<List<BreedEntity>?> = repository.favorites
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun toggleFavorite(breed: BreedEntity) {
+        viewModelScope.launch { repository.setFavorite(breed.id, !breed.isFavorite) }
+    }
+
+    companion object {
+        val Factory = viewModelFactory { initializer { FavoritesViewModel(AppDependencies.repository) } }
+    }
+}
