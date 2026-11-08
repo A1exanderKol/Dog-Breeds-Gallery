@@ -94,6 +94,46 @@ fun BreedDto.toEntity() = BreedEntity(
     isFavorite = false
 )
 
+// ======================= DataSource + Repository =======================
+
+class RemoteDataSource(private val api: DogApi) {
+    suspend fun getBreeds() = api.getBreeds()
+    suspend fun getImages(breedId: Int) = api.getImages(breedId)
+}
+
+class LocalDataSource(private val dao: BreedDao) {
+    fun observeAll() = dao.observeAll()
+    fun observeFavorites() = dao.observeFavorites()
+    fun observeById(id: Int) = dao.observeById(id)
+    suspend fun save(breeds: List<BreedEntity>) = dao.upsertKeepingFavorites(breeds)
+    suspend fun setFavorite(id: Int, isFavorite: Boolean) = dao.setFavorite(id, isFavorite)
+}
+
+/** Единая точка доступа к данным: UI читает из Room, сеть только обновляет кэш. */
+class BreedRepository(
+    private val local: LocalDataSource,
+    private val remote: RemoteDataSource
+) {
+    val breeds: Flow<List<BreedEntity>> = local.observeAll()
+    val favorites: Flow<List<BreedEntity>> = local.observeFavorites()
+
+    fun observeBreed(id: Int): Flow<BreedEntity?> = local.observeById(id)
+
+    suspend fun refresh(): Result<Unit> = try {
+        local.save(remote.getBreeds().map { it.toEntity() })
+        Result.success(Unit)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun getGallery(breedId: Int): List<String> =
+        remote.getImages(breedId).mapNotNull { it.url }
+
+    suspend fun setFavorite(id: Int, isFavorite: Boolean) = local.setFavorite(id, isFavorite)
+}
+
 // ======================= Retrofit =======================
 
 interface DogApi {
