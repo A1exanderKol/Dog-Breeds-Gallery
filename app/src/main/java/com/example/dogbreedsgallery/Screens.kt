@@ -230,3 +230,73 @@ fun HomeScreen(viewModel: HomeViewModel, onBreedClick: (Int) -> Unit, onFavorite
         }
     }
 }
+
+
+// ======================= Детали =======================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DetailScreen(viewModel: DetailViewModel, onBack: () -> Unit) {
+    val breed by viewModel.breed.collectAsStateWithLifecycle()
+    val gallery by viewModel.gallery.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(breed?.name.orEmpty()) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        val b = breed
+        if (b == null) {
+            MessageView(null, "Загрузка…", Modifier.padding(padding))
+            return@Scaffold
+        }
+
+        val images = (listOf(b.imageUrl) + gallery).filter { it.isNotBlank() }.distinct().ifEmpty { listOf("") }
+        val pagerState = rememberPagerState(pageCount = { images.size })
+
+        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())) {
+            HorizontalPager(pagerState, Modifier.fillMaxWidth().height(300.dp)) { page ->
+                DogImage(images[page], Modifier.fillMaxSize())
+            }
+            if (images.size > 1) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), Arrangement.Center) {
+                    repeat(images.size.coerceAtMost(20)) { index ->
+                        val dot by animateColorAsState(
+                            if (pagerState.currentPage == index) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            label = "dot"
+                        )
+                        Box(Modifier.padding(3.dp).size(8.dp).clip(CircleShape).background(dot))
+                    }
+                }
+            }
+
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(b.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                InfoRow("Происхождение", b.origin ?: "Нет данных")
+                InfoRow("Продолжительность жизни", b.lifeSpan.ifBlank { "Нет данных" })
+                InfoRow("Темперамент", b.temperament.ifBlank { "Нет данных" })
+                Text(b.description ?: "Описание отсутствует", style = MaterialTheme.typography.bodyLarge)
+                FilledTonalButton(onClick = viewModel::toggleFavorite, modifier = Modifier.fillMaxWidth()) {
+                    FavoriteIcon(b.isFavorite)
+                    Text(if (b.isFavorite) "В избранном" else "В избранное", Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
+}

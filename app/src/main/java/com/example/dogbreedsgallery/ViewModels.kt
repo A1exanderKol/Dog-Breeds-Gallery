@@ -74,3 +74,37 @@ class HomeViewModel(private val repository: BreedRepository) : ViewModel() {
         val Factory = viewModelFactory { initializer { HomeViewModel(AppDependencies.repository) } }
     }
 }
+
+
+// ======================= Детали =======================
+
+class DetailViewModel(
+    private val breedId: Int,
+    private val repository: BreedRepository
+) : ViewModel() {
+
+    val breed: StateFlow<BreedEntity?> = repository.observeBreed(breedId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _gallery = MutableStateFlow<List<String>>(emptyList())
+    val gallery: StateFlow<List<String>> = _gallery.asStateFlow()
+
+    init {
+        // Офлайн галерея недоступна — останется главное фото из Room/кэша Coil
+        viewModelScope.launch {
+            runCatching { repository.getGallery(breedId) }.onSuccess { _gallery.value = it }
+        }
+    }
+
+    fun toggleFavorite() {
+        val current = breed.value ?: return
+        viewModelScope.launch { repository.setFavorite(current.id, !current.isFavorite) }
+    }
+
+    companion object {
+        fun factory(breedId: Int): ViewModelProvider.Factory = viewModelFactory {
+            initializer { DetailViewModel(breedId, AppDependencies.repository) }
+        }
+    }
+}
+
